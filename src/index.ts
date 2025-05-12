@@ -3,8 +3,7 @@ import { Bot, GrammyError, HttpError, InlineKeyboard } from "grammy";
 import mongoose from "mongoose";
 import { hydrate } from "@grammyjs/hydrate";
 import { MyContext } from "./types.js";
-import { start, profile, productsCommand } from "./commands/index.js";
-import { products } from "./consts/products.js";
+import { start, profile, productsCommand, payments, telegramSuccessPaymentHandler } from "./commands/index.js";
 
 
 const BOT_API_KEY = process.env.BOT_TOKEN;
@@ -13,7 +12,14 @@ if (!BOT_API_KEY) {
 }
 
 const bot = new Bot<MyContext>(BOT_API_KEY);
+
+bot.on('pre_checkout_query', (ctx) => {
+  ctx.answerPreCheckoutQuery(true);
+});
+
 bot.use(hydrate());
+
+bot.on(':successful_payment', telegramSuccessPaymentHandler);
 
 // Ответ на команду /start
 bot.command("start", start);
@@ -36,17 +42,7 @@ bot.callbackQuery("products", productsCommand);
 
 bot.callbackQuery("profile", profile);
 
-bot.callbackQuery(/^buyProduct-\d+$/, (ctx) => {
-  ctx.answerCallbackQuery();
-  const productId = ctx.callbackQuery.data.split('-')[1];
-  const product = products.find((product) => product.id === parseInt(productId),);
-
-  if (!product) {
-    return ctx.callbackQuery.message?.editText('Кажется, что-то пошло не так');
-  }
-
-  ctx.callbackQuery.message?.editText(`Вы выбрали товар: ${product.name}`)
-})
+bot.callbackQuery(/^buyProduct-\d+$/, payments)
 
 bot.callbackQuery("backToMenu", (ctx) => {
   ctx.answerCallbackQuery();
@@ -57,7 +53,7 @@ bot.callbackQuery("backToMenu", (ctx) => {
       reply_markup: new InlineKeyboard()
         .text("Товары", "products")
         .text("Профиль", "profile"),
-    }
+    },
   );
 });
 // Ответ на любое сообщение
